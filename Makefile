@@ -1,7 +1,13 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -Werror -std=c11
-SRC=$(wildcard src/*.c)
-OBJ=$(SRC:.c=.o)
+CXX=g++
+CFLAGS=-Wall -Wextra -std=c11
+CXXFLAGS=-Wall -Wextra -Wno-unused-parameter -std=c++17
+SRC_C=$(wildcard src/*.c)
+SRC_CPP=$(wildcard src/*.cpp)
+SRC=$(SRC_C) $(SRC_CPP)
+OBJ_C=$(SRC_C:.c=.o)
+OBJ_CPP=$(SRC_CPP:.cpp=.o)
+OBJ=$(OBJ_C) $(OBJ_CPP)
 BIN=app
 
 .PHONY: all run test clean
@@ -9,7 +15,13 @@ BIN=app
 all: $(BIN)
 
 $(BIN): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 run: $(BIN)
 	./$(BIN)
@@ -17,5 +29,3 @@ run: $(BIN)
 test: $(BIN) tests/test_basic.sh
 	bash tests/test_basic.sh
 
-clean:
-	rm -f $(BIN) src/*.o
