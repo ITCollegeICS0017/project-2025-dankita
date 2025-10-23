@@ -14,7 +14,7 @@ Photo Studio Management System
 - Build/run instructions
   - Prerequisites: Make and a C++ toolchain available in your environment.
   - Build and run:
-    - `make run`
+    - `make -jN` N - number of threads used to compile
   - Run tests:
     - `make test`
 

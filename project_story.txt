@@ -1,0 +1,12 @@
+The operation of a photo studio is organized as follows: a client places an order (photo
+printing, film developing) with the receptionist. The receptionist records the client’s details
+(surname) and the desired completion time. Orders are issued on two forms: one for the
+client, the other for the photographer.
+The price depends on urgency: express orders carry a 25% surcharge. Payment is made
+upon completion.
+Throughout the day, the receptionist passes orders to the photographer, who processes
+them and returns the results. The photographer uses consumables (paper, developer, etc.),
+which are accounted for by the studio administrator.
+At the end of the day:
+The receptionist submits a report on completed orders and revenue.
+The photographer submits a report on consumed materials.
