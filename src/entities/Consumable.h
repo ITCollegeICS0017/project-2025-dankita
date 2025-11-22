@@ -3,6 +3,7 @@
 
 #include <string>
 #include "interfaces/IDisplay.h"
+#include "exceptions/PhotoStudioExceptions.h"
 
 class Consumable
 {

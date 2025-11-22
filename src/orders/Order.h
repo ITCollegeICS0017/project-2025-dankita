@@ -7,6 +7,7 @@
 #include "entities/Client.h"
 #include "entities/OrderItem.h"
 #include "interfaces/IDisplay.h"
+#include "exceptions/PhotoStudioExceptions.h"
 
 class Order
 {

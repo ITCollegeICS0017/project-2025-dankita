@@ -1,9 +1,30 @@
 #include "orders/Order.h"
+#include "exceptions/PhotoStudioExceptions.h"
 
 Order::Order(const std::string &id, const std::string &cTime, Client *c)
     : orderID(id), completionTime(cTime), status(OrderStatus::PENDING),
       totalPrice(0.0), isPaid(false), client(c)
 {
+  if (id.empty())
+  {
+    throw InvalidDataException(
+        "Order ID cannot be empty",
+        "Data validation failed in Order constructor");
+  }
+
+  if (cTime.empty())
+  {
+    throw InvalidDataException(
+        "Completion time cannot be empty",
+        "Data validation failed in Order constructor");
+  }
+
+  if (c == nullptr)
+  {
+    throw InvalidDataException(
+        "Client cannot be null",
+        "Data validation failed in Order constructor");
+  }
 }
 
 double Order::calculatePrice()
@@ -60,6 +81,13 @@ void Order::recordPayment(const IDisplay *display)
 
 void Order::addItem(OrderItem *item)
 {
+  if (item == nullptr)
+  {
+    throw InvalidDataException(
+        "Cannot add null item to order",
+        "Data validation failed: item == nullptr");
+  }
+
   items.push_back(item);
   totalPrice += item->getSubtotal();
 }

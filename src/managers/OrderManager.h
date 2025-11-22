@@ -8,6 +8,7 @@
 #include "entities/Service.h"
 #include "interfaces/IDisplay.h"
 #include "config/Config.h"
+#include "exceptions/PhotoStudioExceptions.h"
 
 class OrderManager
 {
@@ -28,6 +29,13 @@ public:
 
   const std::vector<Order *> &getAllOrders() const;
   double calculateTotalRevenue() const;
+
+private:
+  void validateOrderCreation(const std::string &orderID, Client *client, const std::string &completionTime) const;
+  void validateOrderItem(const std::string &itemID, int quantity, double unitPrice) const;
+  void validateOrderExists(Order *order) const;
+  void validateOrderStatus(Order *order, OrderStatus expectedStatus) const;
+  bool isOrderIDDuplicate(const std::string &orderID) const;
 };
 
 #endif // ORDER_MANAGER_H

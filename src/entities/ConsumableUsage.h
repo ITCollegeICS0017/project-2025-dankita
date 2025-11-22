@@ -2,6 +2,7 @@
 #define CONSUMABLE_USAGE_H
 
 #include <string>
+#include "exceptions/PhotoStudioExceptions.h"
 
 class ConsumableUsage
 {

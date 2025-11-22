@@ -6,6 +6,7 @@
 #include "entities/Consumable.h"
 #include "entities/ConsumableUsage.h"
 #include "interfaces/IDisplay.h"
+#include "exceptions/PhotoStudioExceptions.h"
 
 class ConsumableManager
 {
@@ -25,6 +26,11 @@ public:
 
   const std::vector<Consumable *> &getAllConsumables() const;
   const std::vector<ConsumableUsage> &getUsageRecords() const;
+
+private:
+  void validateConsumable(Consumable *consumable) const;
+  void validateConsumableUsage(const ConsumableUsage &usage) const;
+  void validateStockUpdate(const std::string &consumableName, int quantity) const;
 };
 
 #endif // CONSUMABLE_MANAGER_H
