@@ -6,7 +6,7 @@ CXXFLAGS=-Wall -Wextra -Wno-unused-parameter -std=c++20
 CPPFLAGS=-Isrc
 
 # Collect sources from src and subfolders
-SRC_DIRS=src src/config src/employees src/entities src/implementations src/managers src/orders src/types
+SRC_DIRS=src src/config src/employees src/entities src/implementations src/managers src/orders src/types src/repository
 
 SRC_C=$(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.c))
 SRC_CPP=$(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.cpp))
@@ -41,7 +41,7 @@ test: $(BIN) tests/test_basic.sh
 	@bash tests/test_basic.sh
 
 clean:
-	@rm -f $(OBJ) $(BIN) src/**/*.d src/*.d
+	@rm -f $(OBJ) $(BIN) src/**/*.d src/*.d orders.dat
 	@echo "Clean complete"
 
 rebuild: clean all

@@ -92,6 +92,22 @@ void Order::addItem(OrderItem *item)
   totalPrice += item->getSubtotal();
 }
 
+// Release 4: Methods for restoring state from persistent storage
+void Order::restoreStatus(OrderStatus restoredStatus)
+{
+  status = restoredStatus;
+}
+
+void Order::restorePrice(double restoredPrice)
+{
+  totalPrice = restoredPrice;
+}
+
+void Order::restorePaidStatus(bool paid)
+{
+  isPaid = paid;
+}
+
 std::string Order::getOrderID() const
 {
   return orderID;

@@ -31,6 +31,11 @@ public:
   void recordPayment(const IDisplay *display);
   void addItem(OrderItem *item);
 
+  // Release 4: Methods for restoring state from persistent storage
+  void restoreStatus(OrderStatus restoredStatus);
+  void restorePrice(double restoredPrice);
+  void restorePaidStatus(bool paid);
+
   std::string getOrderID() const;
   std::string getCompletionTime() const;
   OrderStatus getStatus() const;

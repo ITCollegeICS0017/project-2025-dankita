@@ -4,13 +4,227 @@
 #include <algorithm>
 
 OrderManager::OrderManager(const IDisplay *disp, const Config *cfg)
-    : display(disp), config(cfg)
+    : display(disp), config(cfg), repository(nullptr), fileManager(nullptr)
 {
 }
 
 OrderManager::~OrderManager()
 {
-  // Clean up orders (if ownership is manager)
+  // Clean up orders
+  for (auto *order : orders)
+  {
+    delete order;
+  }
+  orders.clear();
+
+  for (auto *client : clients)
+  {
+    delete client;
+  }
+  clients.clear();
+}
+
+void OrderManager::setRepository(OrderRepository *repo)
+{
+  repository = repo;
+}
+
+void OrderManager::setFileManager(FileManager *fm)
+{
+  fileManager = fm;
+}
+
+OrderRepository *OrderManager::getRepository()
+{
+  return repository;
+}
+
+int OrderManager::statusToInt(OrderStatus status) const
+{
+  switch (status)
+  {
+  case OrderStatus::PENDING:
+    return 0;
+  case OrderStatus::IN_PROGRESS:
+    return 1;
+  case OrderStatus::COMPLETED:
+    return 2;
+  case OrderStatus::CANCELLED:
+    return 3;
+  default:
+    return 0;
+  }
+}
+
+OrderStatus OrderManager::intToStatus(int status) const
+{
+  switch (status)
+  {
+  case 0:
+    return OrderStatus::PENDING;
+  case 1:
+    return OrderStatus::IN_PROGRESS;
+  case 2:
+    return OrderStatus::COMPLETED;
+  case 3:
+    return OrderStatus::CANCELLED;
+  default:
+    return OrderStatus::PENDING;
+  }
+}
+
+Client *OrderManager::findOrCreateClient(const std::string &clientID, const std::string &surname)
+{
+  for (auto *client : clients)
+  {
+    if (client->getID() == clientID)
+    {
+      return client;
+    }
+  }
+
+  Client *newClient = new Client(clientID, surname);
+  clients.push_back(newClient);
+  return newClient;
+}
+
+Order *OrderManager::findOrderById(const std::string &orderID)
+{
+  for (auto *order : orders)
+  {
+    if (order->getOrderID() == orderID)
+    {
+      return order;
+    }
+  }
+  return nullptr;
+}
+
+int OrderManager::getLoadedOrderCount() const
+{
+  return static_cast<int>(orders.size());
+}
+
+const std::vector<Client *> &OrderManager::getAllClients() const
+{
+  return clients;
+}
+
+Order *OrderManager::createOrderFromRecord(const OrderRecord &record, Client *client)
+{
+  Order *order = nullptr;
+
+  if (record.isExpress)
+  {
+    order = new ExpressOrder(record.orderID, record.completionTime, client, config);
+  }
+  else
+  {
+    order = new Order(record.orderID, record.completionTime, client);
+  }
+
+  order->restoreStatus(intToStatus(record.status));
+  order->restorePrice(record.totalPrice);
+  order->restorePaidStatus(record.isPaid);
+
+  return order;
+}
+
+OrderRecord OrderManager::createRecordFromOrder(Order *order, Client *client)
+{
+  OrderRecord record;
+  record.orderID = order->getOrderID();
+  record.clientID = client ? client->getID() : "";
+  record.clientSurname = client ? client->getSurname() : "";
+  record.completionTime = order->getCompletionTime();
+
+  ExpressOrder *expressOrder = dynamic_cast<ExpressOrder *>(order);
+  record.isExpress = (expressOrder != nullptr);
+
+  record.status = statusToInt(order->getStatus());
+  record.totalPrice = order->getTotalPrice();
+  record.isPaid = order->getIsPaid();
+
+  return record;
+}
+
+void OrderManager::syncOrderToRepository(Order *order)
+{
+  if (!repository || !order)
+    return;
+
+  Client *client = order->getClient();
+  OrderRecord record = createRecordFromOrder(order, client);
+
+  int index = repository->findIndexById(order->getOrderID());
+  if (index >= 0)
+  {
+    // Update existing record
+    repository->updateAt(index, record);
+  }
+  else
+  {
+    // Add new record
+    repository->add(record);
+  }
+}
+
+/**
+ * LoadData - Load from file and create actual working entities
+ *
+ * 1. Loads records from file into repository
+ * 2. Creates actual Order and Client objects from those records
+ * 3. Adds them to the working collections so they can be interacted with
+ */
+void OrderManager::loadData()
+{
+  if (!repository || !fileManager)
+    return;
+
+  // Step 1: Load from file into repository
+  fileManager->loadFromFile(*repository);
+
+  // Step 2: Create actual Order and Client objects from loaded records
+  for (int i = 0; i < repository->getCount(); i++)
+  {
+    const OrderRecord &record = repository->getAt(i);
+
+    // Find or create the client for this order
+    Client *client = findOrCreateClient(record.clientID, record.clientSurname);
+
+    // Create the Order object with restored state
+    Order *order = createOrderFromRecord(record, client);
+
+    // Add to our working collection
+    orders.push_back(order);
+  }
+
+  if (display && !orders.empty())
+  {
+    display->showLine("Loaded " + std::to_string(orders.size()) + " order(s) as working entities.");
+  }
+}
+
+void OrderManager::saveData()
+{
+  if (!repository || !fileManager)
+    return;
+
+  repository->clear();
+
+  for (auto *order : orders)
+  {
+    syncOrderToRepository(order);
+  }
+
+  if (repository->getCount() > 0)
+  {
+    fileManager->saveToFile(*repository);
+  }
+  else if (display)
+  {
+    display->showLine("No orders to save.");
+  }
 }
 
 Order *OrderManager::createOrder(const std::string &orderID, Client *client,
@@ -29,6 +243,9 @@ Order *OrderManager::createOrder(const std::string &orderID, Client *client,
   }
 
   orders.push_back(order);
+
+  // Sync to repository
+  syncOrderToRepository(order);
 
   if (display)
   {
@@ -57,6 +274,8 @@ void OrderManager::addItemToOrder(Order *order, const std::string &itemID, int q
 
   OrderItem *item = new OrderItem(itemID, quantity, unitPrice);
   order->addItem(item);
+
+  syncOrderToRepository(order);
 }
 
 void OrderManager::processOrder(Order *order)
@@ -65,6 +284,8 @@ void OrderManager::processOrder(Order *order)
   validateOrderStatus(order, OrderStatus::PENDING);
 
   order->updateStatus(OrderStatus::IN_PROGRESS, display);
+
+  syncOrderToRepository(order);
 
   if (order->getStatus() != OrderStatus::IN_PROGRESS)
   {
@@ -88,7 +309,8 @@ void OrderManager::completeOrder(Order *order)
     display->showLine("Order " + order->getOrderID() + " total price: $" + std::to_string(price));
   }
 
-  // Postcondition: order status should be COMPLETED and price > 0
+  syncOrderToRepository(order);
+
   if (order->getStatus() != OrderStatus::COMPLETED)
   {
     throw ValidationException(
@@ -110,14 +332,7 @@ void OrderManager::recordPayment(Order *order)
   validateOrderExists(order);
   validateOrderStatus(order, OrderStatus::COMPLETED);
 
-  // Precondition: order must have items and a valid price
-  if (order->getItems().empty())
-  {
-    throw BusinessRuleException(
-        "Cannot record payment - order has no items",
-        "Business rule violation: Payment requires at least one order item");
-  }
-
+  // Precondition: order must have a valid price (items may not be stored for loaded orders)
   if (order->getTotalPrice() <= 0)
   {
     throw BusinessRuleException(
@@ -126,6 +341,8 @@ void OrderManager::recordPayment(Order *order)
   }
 
   order->recordPayment(display);
+
+  syncOrderToRepository(order);
 
   if (!order->getIsPaid())
   {
@@ -211,7 +428,6 @@ void OrderManager::validateOrderItem(const std::string &itemID, int quantity, do
 
 void OrderManager::validateOrderExists(Order *order) const
 {
-  // Precondition: order pointer must not be null
   if (order == nullptr)
   {
     throw DataNotFoundException(

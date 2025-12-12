@@ -36,7 +36,31 @@
 // Exceptions - Release 3
 #include "exceptions/PhotoStudioExceptions.h"
 
+// Repository - Release 4
+#include "repository/OrderRepository.h"
+#include "repository/OrderRecord.h"
+#include "repository/FileManager.h"
+
 using namespace std;
+
+const string DATA_FILE = "orders.dat";
+
+string getStatusString(OrderStatus status)
+{
+    switch (status)
+    {
+    case OrderStatus::PENDING:
+        return "PENDING";
+    case OrderStatus::IN_PROGRESS:
+        return "IN_PROGRESS";
+    case OrderStatus::COMPLETED:
+        return "COMPLETED";
+    case OrderStatus::CANCELLED:
+        return "CANCELLED";
+    default:
+        return "UNKNOWN";
+    }
+}
 
 /**
  * Main function - Orchestrates the photo studio workflow
@@ -51,11 +75,23 @@ int main()
     ConsoleDisplay display;
     Config config;
 
+    OrderRepository repository;
+    FileManager fileManager(DATA_FILE, &display);
+
     OrderManager orderManager(&display, &config);
     ConsumableManager consumableManager(&display);
     ReportManager reportManager(&display);
 
-    display.showLine("=== Photo Studio Operations System - Release 3 ===");
+    orderManager.setRepository(&repository);
+    orderManager.setFileManager(&fileManager);
+
+    display.showLine("=== Photo Studio Operations System - Release 4 ===");
+    display.showLine("");
+
+    display.showLine("--- Loading Persistent Data ---");
+    orderManager.loadData();
+
+    int loadedCount = orderManager.getLoadedOrderCount();
     display.showLine("");
 
     try
@@ -71,13 +107,6 @@ int main()
         display.showLine("Administrator: " + admin.getName());
         display.showLine("");
 
-        // Create client
-        Client client("C001", "Smith");
-        display.showLine("--- Client Registered ---");
-        display.showLine("Client: " + client.getSurname() + " (ID: " + client.getID() + ")");
-        display.showLine("");
-
-        // Create services (using Config for prices - Open/Closed Principle)
         Service photoPrinting("S001", "Photo Printing", config.getPhotoPrintingBasePrice(),
                               ServiceType::PHOTO_PRINTING);
         Service filmDeveloping("S002", "Film Developing", config.getFilmDevelopingBasePrice(),
@@ -100,184 +129,148 @@ int main()
         display.showLine("Developer: " + to_string(developer.getCurrentStock()) + " " + developer.getUnitOfMeasure());
         display.showLine("");
 
-        // === WORKFLOW DEMONSTRATION ===
+        if (loadedCount > 0)
+        {
+            display.showLine("=== Working with Loaded Orders ===");
+            display.showLine("");
 
-        display.showLine("=== WORKFLOW: Regular Order ===");
-        display.showLine("");
+            const vector<Order *> &loadedOrders = orderManager.getAllOrders();
 
-        // Receptionist creates a regular order (with validation)
-        Order *regularOrder = orderManager.createOrder("O001", &client, "2025-09-01 14:00", false);
-        receptionist.createOrder(&client, regularOrder, &display);
+            for (Order *order : loadedOrders)
+            {
+                display.showLine("Order: " + order->getOrderID() +
+                                 " | Client: " + order->getClient()->getSurname() +
+                                 " | Status: " + getStatusString(order->getStatus()) +
+                                 " | Price: $" + to_string(order->getTotalPrice()) +
+                                 " | Paid: " + (order->getIsPaid() ? "Yes" : "No"));
 
-        // Add items to order (with validation)
-        orderManager.addItemToOrder(regularOrder, "I001", 5, photoPrinting.getBasePrice());
+                if (order->getStatus() == OrderStatus::PENDING)
+                {
+                    display.showLine("  -> Processing pending order...");
+                    orderManager.processOrder(order);
+                }
+                else if (order->getStatus() == OrderStatus::IN_PROGRESS)
+                {
+                    display.showLine("  -> Completing in-progress order...");
+                    orderManager.completeOrder(order);
+                    if (!order->getIsPaid() && order->getTotalPrice() > 0)
+                    {
+                        orderManager.recordPayment(order);
+                    }
+                }
+            }
+            display.showLine("");
+        }
+        else
+        {
+            display.showLine("=== Creating New Orders (First Run) ===");
+            display.showLine("");
 
-        // Calculate price
-        double regularPrice = regularOrder->calculatePrice();
-        display.showLine("Regular order price: $" + to_string(regularPrice));
-        display.showLine("");
+            Client *client = orderManager.findOrCreateClient("C001", "Smith");
+            display.showLine("Client: " + client->getSurname() + " (ID: " + client->getID() + ")");
+            display.showLine("");
 
-        // Process order workflow (with status validation)
-        orderManager.processOrder(regularOrder);
+            display.showLine("--- Regular Order Workflow ---");
 
-        // Photographer processes the order
-        photographer.viewAssignedOrders(&display);
+            Order *regularOrder = orderManager.createOrder("O001", client, "2025-09-01 14:00", false);
+            receptionist.createOrder(client, regularOrder, &display);
 
-        // Record consumable usage (with stock validation)
-        ConsumableUsage usage1("U001", "Photo Paper", 50);
-        ConsumableUsage usage2("U002", "Developer", 2);
+            orderManager.addItemToOrder(regularOrder, "I001", 5, photoPrinting.getBasePrice());
 
-        vector<ConsumableUsage> usages = {usage1, usage2};
-        photographer.submitConsumablesReport(usages, &display);
+            double regularPrice = regularOrder->calculatePrice();
+            display.showLine("Regular order price: $" + to_string(regularPrice));
 
-        // Update inventory (with validation)
-        consumableManager.recordUsage(usage1);
-        consumableManager.recordUsage(usage2);
-        display.showLine("");
+            orderManager.processOrder(regularOrder);
 
-        // Complete order (with validation)
-        orderManager.completeOrder(regularOrder);
-        orderManager.recordPayment(regularOrder);
-        display.showLine("");
+            ConsumableUsage usage1("U001", "Photo Paper", 50);
+            ConsumableUsage usage2("U002", "Developer", 2);
+            consumableManager.recordUsage(usage1);
+            consumableManager.recordUsage(usage2);
 
-        // === POLYMORPHISM DEMONSTRATION ===
+            orderManager.completeOrder(regularOrder);
+            orderManager.recordPayment(regularOrder);
+            display.showLine("");
 
-        display.showLine("=== WORKFLOW: Express Order ===");
-        display.showLine("");
+            display.showLine("--- Express Order Workflow ---");
 
-        // Create express order
-        Order *expressOrder = orderManager.createOrder("O002", &client, "2025-09-01 18:00", true);
-        receptionist.createOrder(&client, expressOrder, &display);
+            Order *expressOrder = orderManager.createOrder("O002", client, "2025-09-01 18:00", true);
+            receptionist.createOrder(client, expressOrder, &display);
 
-        // Add items to express order
-        orderManager.addItemToOrder(expressOrder, "I002", 3, filmDeveloping.getBasePrice());
+            orderManager.addItemToOrder(expressOrder, "I002", 3, filmDeveloping.getBasePrice());
 
-        // Calculate price
-        double expressPrice = expressOrder->calculatePrice();
-        display.showLine("Express order price (with " +
-                         to_string(static_cast<int>(config.getExpressSurchargeRate() * 100)) +
-                         "% surcharge): $" + to_string(expressPrice));
-        display.showLine("");
+            double expressPrice = expressOrder->calculatePrice();
+            display.showLine("Express order price (with 25% surcharge): $" + to_string(expressPrice));
 
-        // Process express order
-        orderManager.processOrder(expressOrder);
-        orderManager.completeOrder(expressOrder);
-        orderManager.recordPayment(expressOrder);
-        display.showLine("");
+            orderManager.processOrder(expressOrder);
+            orderManager.completeOrder(expressOrder);
+            orderManager.recordPayment(expressOrder);
+            display.showLine("");
 
-        // === ADMINISTRATOR WORKFLOW ===
+            display.showLine("--- Creating Pending Order (for next run demo) ---");
 
-        display.showLine("=== Administrator Operations ===");
-        display.showLine("");
-
-        admin.manageConsumablesStock(&display);
-        admin.reviewConsumablesReports(&display);
-        display.showLine("");
-
-        // === END-OF-DAY REPORTS ===
+            Client *client2 = orderManager.findOrCreateClient("C002", "Johnson");
+            Order *pendingOrder = orderManager.createOrder("O003", client2, "2025-09-02 10:00", false);
+            orderManager.addItemToOrder(pendingOrder, "I003", 10, photoPrinting.getBasePrice());
+            display.showLine("Created pending order O003 for " + client2->getSurname());
+            display.showLine("This order will be loaded and can be processed on the next run!");
+            display.showLine("");
+        }
 
         display.showLine("=== End-of-Day Reports ===");
         display.showLine("");
 
-        // Receptionist generates revenue report
-        receptionist.generateDailyRevenueReport(&display);
         reportManager.generateDailyRevenueReport(&orderManager);
         display.showLine("");
 
-        // Generate consumables usage report
         reportManager.generateConsumablesUsageReport(&consumableManager);
         display.showLine("");
-    }
-    catch (const InvalidInputException &e)
-    {
-        // UI Layer Exception - Invalid user input
+
+        display.showLine("=== Repository Status ===");
         display.showLine("");
-        display.showLine("ERROR: Invalid Input");
-        display.showLine("Message: " + string(e.getUserMessage()));
-        display.showLine("Please check your input and try again.");
+        display.showLine("Total orders in system: " + to_string(orderManager.getLoadedOrderCount()));
+        display.showLine("Repository records: " + to_string(repository.getCount()));
         display.showLine("");
-        return 1;
-    }
-    catch (const InvalidDataException &e)
-    {
-        // Logic Layer Exception - Invalid data
+
+        display.showLine("--- All Orders ---");
+        for (Order *order : orderManager.getAllOrders())
+        {
+            ExpressOrder *express = dynamic_cast<ExpressOrder *>(order);
+            display.showLine("  " + order->getOrderID() +
+                             " | " + order->getClient()->getSurname() +
+                             " | " + (express ? "EXPRESS" : "REGULAR") +
+                             " | " + getStatusString(order->getStatus()) +
+                             " | $" + to_string(order->getTotalPrice()) +
+                             " | " + (order->getIsPaid() ? "PAID" : "UNPAID"));
+        }
         display.showLine("");
-        display.showLine("ERROR: Invalid Data");
-        display.showLine("Message: " + string(e.getUserMessage()));
-        display.showLine("Please correct the data and try again.");
-        display.showLine("");
-        return 1;
-    }
-    catch (const ValidationException &e)
-    {
-        // Logic Layer Exception - Validation failure
-        display.showLine("");
-        display.showLine("ERROR: Validation Failed");
-        display.showLine("Message: " + string(e.getUserMessage()));
-        display.showLine("The operation could not be completed.");
-        display.showLine("");
-        return 1;
-    }
-    catch (const BusinessRuleException &e)
-    {
-        // Logic Layer Exception - Business rule violation
-        display.showLine("");
-        display.showLine("ERROR: Business Rule Violation");
-        display.showLine("Message: " + string(e.getUserMessage()));
-        display.showLine("Please follow the business rules.");
-        display.showLine("");
-        return 1;
-    }
-    catch (const InsufficientStockException &e)
-    {
-        // Repository Layer Exception - Insufficient stock
-        display.showLine("");
-        display.showLine("ERROR: Insufficient Stock");
-        display.showLine("Message: " + string(e.getUserMessage()));
-        display.showLine("Please check inventory levels.");
-        display.showLine("");
-        return 1;
-    }
-    catch (const DataNotFoundException &e)
-    {
-        // Repository Layer Exception - Data not found
-        display.showLine("");
-        display.showLine("ERROR: Data Not Found");
-        display.showLine("Message: " + string(e.getUserMessage()));
-        display.showLine("The requested data could not be located.");
-        display.showLine("");
-        return 1;
-    }
-    catch (const DuplicateDataException &e)
-    {
-        // Repository Layer Exception - Duplicate data
-        display.showLine("");
-        display.showLine("ERROR: Duplicate Data");
-        display.showLine("Message: " + string(e.getUserMessage()));
-        display.showLine("This record already exists.");
-        display.showLine("");
-        return 1;
     }
     catch (const PhotoStudioException &e)
     {
-        // Base exception - catch-all for any other custom exceptions
         display.showLine("");
-        display.showLine("ERROR: Application Error");
-        display.showLine("Message: " + string(e.getUserMessage()));
-        display.showLine("Please contact support if this persists.");
+        display.showLine("ERROR: " + string(e.getUserMessage()));
         display.showLine("");
+
+        display.showLine("--- Saving Data Before Exit ---");
+        orderManager.saveData();
         return 1;
     }
     catch (const std::exception &e)
     {
-        // Standard exception - unexpected errors
         display.showLine("");
-        display.showLine("ERROR: Unexpected Error");
-        display.showLine("An unexpected error occurred.");
-        display.showLine("Please contact technical support.");
+        display.showLine("ERROR: Unexpected error occurred.");
         display.showLine("");
+
+        display.showLine("--- Saving Data Before Exit ---");
+        orderManager.saveData();
         return 1;
     }
+
+    display.showLine("--- Saving Data Before Exit ---");
+    orderManager.saveData();
+    display.showLine("");
+
+    display.showLine("=== Photo Studio System Terminated Successfully ===");
+    display.showLine("Data has been saved. Run again to see persistence in action!");
 
     return 0;
 }
