@@ -1,0 +1,144 @@
+#include "orders/Order.h"
+#include "exceptions/PhotoStudioExceptions.h"
+
+Order::Order(const std::string &id, const std::string &cTime, Client *c)
+    : orderID(id), completionTime(cTime), status(OrderStatus::PENDING),
+      totalPrice(0.0), isPaid(false), client(c)
+{
+  if (id.empty())
+  {
+    throw InvalidDataException(
+        "Order ID cannot be empty",
+        "Data validation failed in Order constructor");
+  }
+
+  if (cTime.empty())
+  {
+    throw InvalidDataException(
+        "Completion time cannot be empty",
+        "Data validation failed in Order constructor");
+  }
+
+  if (c == nullptr)
+  {
+    throw InvalidDataException(
+        "Client cannot be null",
+        "Data validation failed in Order constructor");
+  }
+}
+
+double Order::calculatePrice()
+{
+  if (items.empty())
+  {
+    return totalPrice;
+  }
+
+  totalPrice = 0.0;
+  for (const auto &item : items)
+  {
+    totalPrice += item->getSubtotal();
+  }
+
+  return totalPrice;
+}
+
+void Order::updateStatus(OrderStatus newStatus, const IDisplay *display)
+{
+  status = newStatus;
+
+  if (display)
+  {
+    std::string statusStr;
+    switch (status)
+    {
+    case OrderStatus::PENDING:
+      statusStr = "PENDING";
+      break;
+    case OrderStatus::IN_PROGRESS:
+      statusStr = "IN_PROGRESS";
+      break;
+    case OrderStatus::COMPLETED:
+      statusStr = "COMPLETED";
+      break;
+    case OrderStatus::CANCELLED:
+      statusStr = "CANCELLED";
+      break;
+    }
+    display->showLine("Order " + orderID + " status updated to " + statusStr);
+  }
+}
+
+void Order::recordPayment(const IDisplay *display)
+{
+  isPaid = true;
+
+  if (display)
+  {
+    display->showLine("Payment recorded for order " + orderID);
+  }
+}
+
+void Order::addItem(OrderItem *item)
+{
+  if (item == nullptr)
+  {
+    throw InvalidDataException(
+        "Cannot add null item to order",
+        "Data validation failed: item == nullptr");
+  }
+
+  items.push_back(item);
+  totalPrice += item->getSubtotal();
+}
+
+// Release 4: Methods for restoring state from persistent storage
+void Order::restoreStatus(OrderStatus restoredStatus)
+{
+  status = restoredStatus;
+}
+
+void Order::restorePrice(double restoredPrice)
+{
+  totalPrice = restoredPrice;
+}
+
+void Order::restorePaidStatus(bool paid)
+{
+  isPaid = paid;
+}
+
+std::string Order::getOrderID() const
+{
+  return orderID;
+}
+
+std::string Order::getCompletionTime() const
+{
+  return completionTime;
+}
+
+OrderStatus Order::getStatus() const
+{
+  return status;
+}
+
+double Order::getTotalPrice() const
+{
+  return totalPrice;
+}
+
+bool Order::getIsPaid() const
+{
+  return isPaid;
+}
+
+Client *Order::getClient() const
+{
+  return client;
+}
+
+const std::vector<OrderItem *> &Order::getItems() const
+{
+  return items;
+}

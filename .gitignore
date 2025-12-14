@@ -1,0 +1,16 @@
+# Build artifacts
+*.o
+*.exe
+app
+
+# Documentation build outputs
+docs/html/
+docs/latex/
+
+# IDE and version control
+.github/
+.vscode/
+.git/
+
+# Data files (user-specific, not committed)
+orders.dat
